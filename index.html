@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Activaciones Copernicus EMS · España</title>
+<meta name="theme-color" content="#12324a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --azul:#12324a; --azul2:#1d4e73; --fondo:#f4f6f8; --tarjeta:#fff; --borde:#dfe5ea; --texto:#1c2933; --suave:#5d6f7d;
+    --fuego:#e4572e; --agua:#1976d2; --volcan:#7b1fa2; --otro:#546e7a; --activa:#0a8f4d;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--texto);background:var(--fondo);display:flex;flex-direction:column}
+  #topbar{background:var(--azul);color:#fff;padding:8px 12px;display:flex;align-items:center;gap:10px;flex:none}
+  #topbar h1{font-size:16px;margin:0;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #topbar .act{font-size:11px;opacity:.8;white-space:nowrap}
+  #topbar button{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:50%;width:30px;height:30px;font-size:15px;cursor:pointer}
+  #cuerpo{flex:1;display:flex;min-height:0}
+  #panel{width:400px;max-width:100%;background:var(--fondo);border-right:1px solid var(--borde);display:flex;flex-direction:column;min-height:0;flex:none}
+  #map{flex:1;min-width:0;background:#cfd8dc}
+  #filtros{padding:10px;background:var(--tarjeta);border-bottom:1px solid var(--borde);flex:none}
+  .kpis{display:flex;gap:6px;margin-bottom:8px}
+  .kpi{flex:1;border:1px solid var(--borde);border-radius:8px;padding:6px 4px;text-align:center;background:#fff;cursor:pointer;font:inherit;color:inherit}
+  .kpi b{display:block;font-size:18px;line-height:1.1}
+  .kpi span{font-size:11px;color:var(--suave)}
+  .kpi.sel{border-color:var(--azul2);background:#e8f1f8;box-shadow:inset 0 0 0 1px var(--azul2)}
+  .kpi.activa b{color:var(--activa)}
+  .fila{display:flex;gap:6px;margin-top:6px}
+  .fila select,.fila input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--borde);border-radius:6px;font:inherit;background:#fff}
+  #lista,#detalle{flex:1;overflow-y:auto;min-height:0;padding:8px 10px 20px}
+  #detalle{display:none;background:var(--fondo)}
+  .item{background:var(--tarjeta);border:1px solid var(--borde);border-left:5px solid var(--otro);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer}
+  .item:hover{border-color:var(--azul2)}
+  .item .cab{display:flex;gap:6px;align-items:baseline}
+  .item .cod{font-weight:700}
+  .item .fecha{margin-left:auto;color:var(--suave);font-size:12px;white-space:nowrap}
+  .item .nom{margin:2px 0 4px}
+  .chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+  .chip{font-size:11px;padding:1px 7px;border-radius:10px;background:#eceff1;color:#37474f;white-space:nowrap}
+  .chip.FEP{background:#fff3cd;color:#7a5600}.chip.DEL{background:#d7ebff;color:#0b4a8a}.chip.GRA{background:#f6d9f5;color:#6a1b6a}.chip.REF{background:#e0e0e0}
+  .chip.abierta{background:var(--activa);color:#fff;font-weight:600}
+  .chip.cerrada{background:#eceff1;color:#546e7a}
+  .chip.sin{background:#fff;border:1px dashed #b0bec5;color:#78909c}
+  .vacio{padding:24px 12px;text-align:center;color:var(--suave)}
+  .volver{background:none;border:0;color:var(--azul2);font:inherit;font-weight:600;cursor:pointer;padding:4px 0;margin-bottom:4px}
+  #detalle h2{font-size:17px;margin:2px 0 6px}
+  .caja{background:var(--tarjeta);border:1px solid var(--borde);border-radius:8px;padding:10px;margin-bottom:8px}
+  .caja h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--suave);margin:0 0 6px}
+  dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0}
+  dt{color:var(--suave)}dd{margin:0}
+  .aviso{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px}
+  a{color:var(--azul2)}
+  .enlaces{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .btn{display:inline-block;border:1px solid var(--azul2);color:var(--azul2);background:#fff;border-radius:6px;padding:4px 9px;font:inherit;font-size:12px;text-decoration:none;cursor:pointer}
+  .btn:hover{background:#e8f1f8}.btn.on{background:var(--azul2);color:#fff}
+  .btn[disabled]{opacity:.5;cursor:wait}
+  details.aoi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:8px;margin-bottom:6px}
+  details.aoi>summary{padding:8px 10px;cursor:pointer;font-weight:600;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  details.aoi>summary .n{color:var(--suave);font-weight:400}
+  .aoi-cuerpo{padding:0 10px 10px}
+  .prod{border-top:1px solid var(--borde);padding:8px 0}
+  .prod .t{font-weight:600;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .prod .meta{color:var(--suave);font-size:12px;margin:2px 0}
+  .img{background:#f7f9fa;border:1px solid var(--borde);border-radius:6px;padding:6px 8px;margin-top:5px;font-size:12.5px}
+  .img .s{font-weight:600}
+  .img code{font-size:11px;word-break:break-all;color:#455a64}
+  .sub{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--suave);margin:8px 0 2px}
+  #leyenda{position:absolute;right:10px;bottom:24px;z-index:500;background:rgba(255,255,255,.94);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 1px 5px rgba(0,0,0,.3);max-width:230px}
+  #leyenda div{display:flex;align-items:center;gap:6px;margin:2px 0}
+  #leyenda i{width:12px;height:12px;border-radius:50%;display:inline-block;flex:none}
+  #leyenda .cuad{border-radius:2px}
+  #capas-activas{position:absolute;left:54px;top:10px;z-index:500;display:flex;flex-direction:column;gap:4px;max-width:60%}
+  #capas-activas .c{background:rgba(255,255,255,.95);border-radius:6px;padding:3px 6px 3px 9px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.3);display:flex;gap:6px;align-items:center}
+  #capas-activas button{border:0;background:none;cursor:pointer;font-size:14px;color:#b71c1c}
+  #mapa-cont{position:relative;flex:1;min-width:0;display:flex}
+  #ayuda{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:14px}
+  #ayuda .tarjeta{background:#fff;border-radius:10px;max-width:640px;max-height:90vh;overflow:auto;padding:16px 18px;position:relative}
+  #ayuda h2{margin-top:0}
+  #ayuda .x{position:absolute;right:10px;top:8px;border:0;background:none;font-size:20px;cursor:pointer}
+  @media (max-width:760px){
+    #cuerpo{flex-direction:column-reverse}
+    #panel{width:100%;height:52vh;border-right:0;border-top:1px solid var(--borde)}
+    #topbar .act{display:none}
+    #panel.en-detalle #filtros{display:none}
+    #leyenda{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <h1>Copernicus EMS Rapid Mapping · España</h1>
+  <span class="act" id="actualizado"></span>
+  <button id="btn-ayuda" title="Ayuda">?</button>
+</div>
+<div id="cuerpo">
+  <div id="panel">
+    <div id="filtros">
+      <div class="kpis">
+        <button class="kpi sel" data-estado=""><b id="k-todas">–</b><span>Todas</span></button>
+        <button class="kpi activa" data-estado="abierta"><b id="k-abiertas">–</b><span>En curso</span></button>
+        <button class="kpi" data-estado="cerrada"><b id="k-cerradas">–</b><span>Finalizadas</span></button>
+      </div>
+      <div class="fila">
+        <input id="f-texto" type="search" placeholder="Buscar código, lugar, sensor…">
+      </div>
+      <div class="fila">
+        <select id="f-cat"><option value="">Tipo de evento</option></select>
+        <select id="f-anio"><option value="">Año</option></select>
+        <select id="f-prod">
+          <option value="">Producto</option>
+          <option value="FEP">FEP · First Estimate</option>
+          <option value="DEL">DEL · Delineation</option>
+          <option value="GRA">GRA · Grading</option>
+        </select>
+      </div>
+    </div>
+    <div id="lista"><div class="vacio">Cargando activaciones…</div></div>
+    <div id="detalle"></div>
+  </div>
+  <div id="mapa-cont">
+    <div id="map"></div>
+    <div id="capas-activas"></div>
+    <div id="leyenda">
+      <div><i style="background:var(--fuego)"></i>Incendio</div>
+      <div><i style="background:var(--agua)"></i>Inundación</div>
+      <div><i style="background:var(--volcan)"></i>Volcán</div>
+      <div><i style="background:var(--otro)"></i>Otros</div>
+      <div><i style="background:#fff;border:3px solid var(--activa)"></i>En curso</div>
+      <div><i style="background:#fff;border:2px solid #78909c"></i>Sin detalle público (anterior a sept. 2023)</div>
+      <div><i class="cuad" style="background:rgba(29,78,115,.2);border:2px solid var(--azul2)"></i>AOI (área de interés)</div>
+    </div>
+  </div>
+</div>
+
+<div id="ayuda"><div class="tarjeta">
+  <button class="x" id="ayuda-x">✕</button>
+  <h2>Qué es esto</h2>
+  <p>Listado y mapa de las activaciones del servicio <b>Copernicus EMS Rapid Mapping</b> (códigos <b>EMSR</b>) que afectan a España. Cada activación se divide en <b>AOIs</b> (áreas de interés) y para cada AOI se van entregando <b>productos</b>:</p>
+  <ul>
+    <li><b>FEP · First Estimate Product</b>: primera estimación rápida y aproximada del evento.</li>
+    <li><b>DEL · Delineation</b>: delimitación de la extensión del evento (área quemada, inundada…).</li>
+    <li><b>GRA · Grading</b>: evaluación del grado de daño (edificios, vías, usos del suelo…).</li>
+    <li><b>Monitorización (MONIT01, 02…)</b>: actualizaciones posteriores del mismo tipo de producto con una imagen nueva.</li>
+  </ul>
+  <p>Al abrir una activación verás quién la solicitó, sus AOIs y, por cada producto, el estado, la fecha de entrega y <b>las imágenes de satélite utilizadas</b> (sensor, clase de resolución, fecha de adquisición y nombre de fichero). Desde ahí puedes pintar en el mapa las capas vectoriales del producto y la imagen tal y como la sirve el visor oficial.</p>
+  <h3>Limitaciones de los datos</h3>
+  <ul>
+    <li>La API pública de Copernicus solo da el detalle (solicitante, AOIs, productos, imágenes) de las activaciones <b>desde septiembre de 2023</b>. Las anteriores aparecen con sus datos básicos y un punto en el mapa; el detalle exige iniciar sesión en el portal oficial.</li>
+    <li>Las <b>imágenes originales</b> solo pueden descargarlas los usuarios autorizados desde el portal oficial de la activación. Aquí se enlaza el paquete del producto (vectores y mapas, público) y la versión de la imagen que usa el visor oficial cuando existe.</li>
+    <li>Los datos no se leen en directo: se regeneran periódicamente (fecha en la cabecera).</li>
+  </ul>
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const COLOR = { fire: "#e4572e", flood: "#1976d2", volcano: "#7b1fa2" };
+const CAT_ES = { "Wildfire": "Incendio", "Flood": "Inundación", "Volcanic Activity": "Actividad volcánica", "Other": "Otros", "Storm": "Temporal", "Earthquake": "Terremoto" };
+const TIPO = { FEP: "First Estimate", DEL: "Delineation", GRA: "Grading", REF: "Reference" };
+const CAPA_ES = {
+  observedEventA: "Evento observado (área)", observedEventL: "Evento observado (líneas)", observedEventP: "Evento observado (puntos)",
+  previousObservedEventA: "Evento observado anterior", maximumFloodExtentA: "Máxima extensión inundada", floodDepthA: "Calado de inundación",
+  modelledEventA: "Evento modelizado", notAnalysedA: "Zona no analizada", builtUpP: "Edificios (puntos)", builtUpA: "Edificios (área)",
+  naturalLandUseA: "Usos del suelo", transportationL: "Vías (líneas)", transportationA: "Vías (área)", transportationP: "Transporte (puntos)",
+  facilitiesL: "Instalaciones (líneas)", facilitiesA: "Instalaciones (área)", facilitiesP: "Instalaciones (puntos)", ancillaryCrisisInfoP: "Información auxiliar"
+};
+const RES_ES = { "VHR1": "muy alta resolución (≤ 1 m)", "VHR2": "muy alta resolución (1–4 m)", "HR+": "alta resolución (4–30 m)", "Aerial": "imagen aérea" };
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const color = a => COLOR[a.categorySlug] || "#546e7a";
+const fecha = (s, hora) => {
+  if (!s) return "—";
+  const d = new Date(s.endsWith("Z") ? s : s + "Z");
+  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) +
+    (hora ? " " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }) + " UTC" : "");
+};
+
+let ACTS = [], porCodigo = new Map(), filtro = { estado: "", texto: "", cat: "", anio: "", prod: "" }, seleccion = null;
+const marcadores = new Map(), capasExtra = new Map();
+
+// ---------- Mapa ----------
+const VISTA_INICIAL = [[27.5, -18.5], [44, 4.5]];
+const map = L.map("map", { zoomControl: true }).fitBounds(VISTA_INICIAL);
+const bases = {
+  // IGN-Base en vez de OpenStreetMap: OSM bloquea (403) las teselas pedidas sin Referer, p. ej. al abrir el HTML como fichero local.
+  "Mapa": L.tileLayer("https://www.ign.es/wmts/ign-base?layer=IGNBaseTodo&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image/jpeg&TileMatrix={z}&TileCol={x}&TileRow={y}", { maxZoom: 19, attribution: "IGN-Base © IGN" }).addTo(map),
+  "Ortofoto PNOA": L.tileLayer.wms("https://www.ign.es/wms-inspire/pnoa-ma", { layers: "OI.OrthoimageCoverage", format: "image/jpeg", maxZoom: 20, attribution: "PNOA © IGN" })
+};
+L.control.layers(bases, null, { position: "topright" }).addTo(map);
+map.attributionControl.addAttribution("Datos: Copernicus Emergency Management Service");
+map.createPane("imagenes").style.zIndex = 350;
+const capaAois = L.geoJSON(null, {
+  style: f => estiloAoi(f.properties.code),
+  onEachFeature: (f, l) => {
+    l.bindTooltip(`${f.properties.code} · AOI${String(f.properties.number).padStart(2, "0")} ${f.properties.name}`, { sticky: true });
+    l.on("click", () => abrir(f.properties.code, false));
+  }
+}).addTo(map);
+const capaPuntos = L.layerGroup().addTo(map);
+
+function estiloAoi(code) {
+  const a = porCodigo.get(code), sel = seleccion === code;
+  return { color: sel ? "#12324a" : color(a), weight: sel ? 3 : 1.5, fillColor: color(a), fillOpacity: sel ? 0.12 : 0.25, dashArray: a.closed ? null : "6 4" };
+}
+function estiloPunto(a) {
+  const sel = seleccion === a.code;
+  if (!a.detail) return { radius: sel ? 8 : 5, color: sel ? "#12324a" : "#78909c", weight: 2, fillColor: color(a), fillOpacity: .35 };
+  return { radius: sel ? 9 : 6, color: sel ? "#12324a" : (a.closed ? "#fff" : "#0a8f4d"), weight: a.closed && !sel ? 1.5 : 3, fillColor: color(a), fillOpacity: .95 };
+}
+
+function pintarMapa(visibles) {
+  const set = new Set(visibles.map(a => a.code));
+  capaAois.clearLayers(); capaPuntos.clearLayers(); marcadores.clear();
+  for (const a of ACTS) {
+    if (!set.has(a.code)) continue;
+    if (a.detail) for (const o of a.aois) if (o.extent)
+      capaAois.addData({ type: "Feature", geometry: o.extent, properties: { code: a.code, number: o.number, name: o.name } });
+    if (a.centroid) {
+      const m = L.circleMarker([a.centroid[1], a.centroid[0]], estiloPunto(a))
+        .bindTooltip(`<b>${a.code}</b> · ${esc(a.name)}<br>${fecha(a.activationTime)}`)
+        .on("click", () => abrir(a.code, false));
+      capaPuntos.addLayer(m); marcadores.set(a.code, m);
+    }
+  }
+}
+function refrescarEstilos() {
+  capaAois.eachLayer(l => l.setStyle(estiloAoi(l.feature.properties.code)));
+  marcadores.forEach((m, code) => { m.setStyle(estiloPunto(porCodigo.get(code))); m.setRadius(estiloPunto(porCodigo.get(code)).radius); });
+  if (seleccion && marcadores.has(seleccion)) marcadores.get(seleccion).bringToFront();
+}
+
+// ---------- Lista ----------
+function tiposDe(a) {
+  if (!a.detail) return [];
+  const s = new Set(); a.aois.forEach(o => o.products.forEach(p => s.add(p.type)));
+  return ["FEP", "DEL", "GRA", "REF"].filter(t => s.has(t));
+}
+function textoBusqueda(a) {
+  if (!a._txt) a._txt = [a.code, a.name, a.summary, a.reason, a.activator,
+    ...(a.aois || []).flatMap(o => [o.name, ...o.products.flatMap(p => p.images.map(i => i.sensorName))])].join(" ").toLowerCase();
+  return a._txt;
+}
+function filtrar() {
+  const t = filtro.texto.trim().toLowerCase();
+  return ACTS.filter(a =>
+    (!filtro.estado || (filtro.estado === "abierta") === !a.closed) &&
+    (!filtro.cat || a.category === filtro.cat) &&
+    (!filtro.anio || a.activationTime.startsWith(filtro.anio)) &&
+    (!filtro.prod || tiposDe(a).includes(filtro.prod)) &&
+    (!t || textoBusqueda(a).includes(t)));
+}
+function chipEstado(a) { return a.closed ? '<span class="chip cerrada">Finalizada</span>' : '<span class="chip abierta">● En curso</span>'; }
+function pintarLista() {
+  const v = filtrar();
+  pintarMapa(v);
+  if (!v.length) {
+    $("lista").innerHTML = `<div class="vacio">${filtro.estado === "abierta" && !ACTS.some(a => !a.closed)
+      ? "Ahora mismo no hay ninguna activación de Rapid Mapping abierta en España."
+      : "Ninguna activación cumple los filtros."}</div>`;
+    return;
+  }
+  $("lista").innerHTML = v.map(a => `
+    <div class="item" data-code="${a.code}" style="border-left-color:${color(a)}">
+      <div class="cab"><span class="cod">${a.code}</span>${chipEstado(a)}<span class="fecha">${fecha(a.activationTime)}</span></div>
+      <div class="nom">${esc(a.name)}</div>
+      <div class="chips">
+        <span class="chip">${esc(CAT_ES[a.category] || a.category)}</span>
+        ${tiposDe(a).map(t => `<span class="chip ${t}" title="${TIPO[t]}">${t}</span>`).join("")}
+        <span class="chip">${a.nAois} AOI · ${a.nProducts} prod.</span>
+        ${a.detail ? "" : '<span class="chip sin">sin detalle público</span>'}
+      </div>
+    </div>`).join("");
+}
+$("lista").addEventListener("click", e => { const it = e.target.closest(".item"); if (it) abrir(it.dataset.code, true); });
+
+// ---------- Detalle ----------
+function solicitante(a) {
+  if (!a.activator) return "—";
+  const [pais, org] = a.activator.includes("|") ? a.activator.split("|") : ["", a.activator];
+  const sigla = (org.match(/\(([A-Z]{3,})\)/) || [])[1];
+  return `${sigla ? `<b>${sigla}</b> · ` : ""}${esc(org)}${pais ? ` (${esc(pais)})` : ""}`;
+}
+function htmlImagen(im, p) {
+  const cog = p.cogs.find(c => c.endsWith("/" + im.fileName.replace(/\.tif$/i, "_cog.tif")));
+  return `<div class="img">
+    <div><span class="s">${esc(im.sensorName)}</span> · ${im.sensorType === "sar" ? "radar (SAR)" : "óptica"} · ${esc(im.resolutionClass)}${RES_ES[im.resolutionClass] ? " – " + RES_ES[im.resolutionClass] : ""}</div>
+    <div>Adquirida: <b>${fecha(im.acquisitionTime, true)}</b>${im.new ? "" : " · <i>ya usada en un producto anterior</i>"}</div>
+    <code>${esc(im.fileName)}</code>
+    ${cog ? `<div class="enlaces" style="margin-top:5px">
+      <button class="btn" data-cog="${esc(cog)}" data-etq="${esc(im.sensorName + " " + fecha(im.acquisitionTime))}">Ver imagen en el mapa</button>
+      <a class="btn" href="${esc(cog)}" target="_blank" rel="noopener" title="GeoTIFF optimizado (COG) que usa el visor oficial; se puede abrir en QGIS por URL">COG del visor</a></div>` : ""}
+  </div>`;
+}
+function htmlProducto(a, o, p) {
+  const etq = p.monitoring ? `Monitorización ${p.monitoringNumber}` : "Producto inicial";
+  const estado = p.status === "F" ? '<span class="chip" style="background:#dcf3e4;color:#0a6b3a">Entregado</span>'
+    : p.status === "N" ? '<span class="chip" style="background:#eceff1">No producido</span>'
+    : `<span class="chip abierta">En producción</span>`;
+  return `<div class="prod">
+    <div class="t"><span class="chip ${p.type}">${p.type}</span>${TIPO[p.type] || p.type} · ${etq} ${estado}</div>
+    <div class="meta">${p.deliveryTime ? (p.status === "N" ? "Decidido: " : "Entregado: ") + fecha(p.deliveryTime, true) : (p.expectedDelivery ? "Entrega prevista: " + fecha(p.expectedDelivery, true) : "")}
+      ${p.version > 1 ? ` · versión ${p.version}` : ""}${p.mapsCount ? ` · ${p.mapsCount} mapas` : ""}${p.feasible === false ? " · no viable" : ""}</div>
+    ${p.versionReason ? `<div class="meta">${p.status === "N" ? "Motivo" : "Motivo de la nueva versión"}: ${esc(p.versionReason)}</div>` : ""}
+    ${p.images.length ? `<div class="sub">Imágenes utilizadas (${p.images.length})</div>${p.images.map(im => htmlImagen(im, p)).join("")}` : '<div class="meta">Sin imágenes registradas.</div>'}
+    ${p.vectors.length ? `<div class="sub">Capas del producto (pintar en el mapa)</div><div class="enlaces" style="margin-top:2px">${p.vectors.map(v =>
+      `<button class="btn" data-json="${esc(v.json)}" data-etq="${esc(`AOI${String(o.number).padStart(2, "0")} ${p.type}${p.monitoring ? " M" + p.monitoringNumber : ""} · ${CAPA_ES[v.name] || v.name}`)}">${esc(CAPA_ES[v.name] || v.name)}</button>`).join("")}</div>` : ""}
+    ${p.downloadPath ? `<div class="enlaces"><a class="btn" href="${esc(p.downloadPath)}" rel="noopener">⬇ Paquete del producto (.zip)</a></div>` : ""}
+  </div>`;
+}
+function htmlDetalle(a) {
+  const oficial = `https://mapping.emergency.copernicus.eu/activations/${a.code}/`;
+  let h = `<button class="volver" id="volver">← Volver al listado</button>
+    <div class="chips" style="margin-bottom:4px"><span class="chip" style="background:${color(a)};color:#fff">${esc(CAT_ES[a.category] || a.category)}${a.subCategory ? " · " + esc(a.subCategory) : ""}</span>${chipEstado(a)}</div>
+    <h2>${a.code} · ${esc(a.name)}</h2>`;
+  if (!a.detail) h += `<div class="aviso">La API pública de Copernicus no ofrece el detalle de esta activación (solicitante, AOIs, productos e imágenes): solo lo publica para activaciones desde septiembre de 2023. Se puede consultar en el portal oficial.</div>`;
+  h += `<div class="caja"><h3>Activación</h3><dl>
+      ${a.detail ? `<dt>Solicitante</dt><dd>${solicitante(a)}</dd>` : ""}
+      ${a.eventTime ? `<dt>Evento</dt><dd>${fecha(a.eventTime, true)}</dd>` : ""}
+      <dt>Activación</dt><dd>${fecha(a.activationTime, true)}</dd>
+      <dt>Última act.</dt><dd>${fecha(a.lastUpdate, true)}</dd>
+      <dt>Países</dt><dd>${a.countries.map(c => c === "Spain" ? "España" : esc(c)).join(", ")}</dd>
+      <dt>Contenido</dt><dd>${a.nAois} AOI · ${a.nProducts} productos${a.detail ? " · " + tiposDe(a).map(t => `<span class="chip ${t}">${t}</span>`).join(" ") : ""}</dd>
+      ${a.gdacsId ? `<dt>GDACS</dt><dd>${esc(a.gdacsId)}</dd>` : ""}
+      ${a.charterNumber ? `<dt>Charter</dt><dd>${a.charterUrl ? `<a href="${esc(a.charterUrl)}" target="_blank" rel="noopener">${esc(a.charterNumber)}</a>` : esc(a.charterNumber)}</dd>` : ""}
+    </dl>
+    <p style="margin:8px 0 0">${esc(a.reason || a.summary)}</p>
+    <div class="enlaces">
+      <a class="btn" href="${oficial}" target="_blank" rel="noopener">Portal oficial (descarga de imágenes para usuarios autorizados)</a>
+      ${a.reportLink ? `<a class="btn" href="${esc(a.reportLink)}" target="_blank" rel="noopener">Informe</a>` : ""}
+      ${a.productsPath ? `<a class="btn" href="${esc(a.productsPath)}" rel="noopener">⬇ Todos los productos (.zip)</a>` : ""}
+    </div></div>`;
+  if (a.detail) {
+    if (a.stats && Object.keys(a.stats).length) h += `<div class="caja"><h3>Cifras globales (Copernicus)</h3><dl>${Object.entries(a.stats).map(([k, v]) =>
+      `<dt>${esc(k === "max_extent" ? "Max. extent [ha]" : k)}</dt><dd>${typeof v === "number" ? v.toLocaleString("es-ES") : esc(v)}</dd>`).join("")}</dl></div>`;
+    h += `<div class="sub" style="margin-left:2px">Áreas de interés (${a.aois.length})</div>`;
+    h += a.aois.map((o, i) => {
+      const nImg = o.products.reduce((n, p) => n + p.images.length, 0);
+      const tipos = [...new Set(o.products.map(p => p.type))];
+      return `<details class="aoi" data-aoi="${o.number}" ${a.aois.length <= 2 ? "open" : ""}>
+        <summary>AOI${String(o.number).padStart(2, "0")} · ${esc(o.name)} ${tipos.map(t => `<span class="chip ${t}">${t}</span>`).join("")}<span class="n">${o.products.length} prod. · ${nImg} imág.</span></summary>
+        <div class="aoi-cuerpo">
+          <div class="enlaces" style="margin:0 0 6px"><button class="btn" data-zoom="${i}">Centrar en el mapa</button></div>
+          ${o.products.length ? o.products.map(p => htmlProducto(a, o, p)).join("") : '<div class="meta">Sin productos todavía.</div>'}
+        </div></details>`;
+    }).join("");
+  }
+  return h;
+}
+
+function abrir(code, encuadrar) {
+  const a = porCodigo.get(code); if (!a) return;
+  seleccion = code; limpiarExtras();
+  $("detalle").innerHTML = htmlDetalle(a);
+  $("detalle").style.display = "block"; $("lista").style.display = "none"; $("detalle").scrollTop = 0;
+  $("panel").classList.add("en-detalle");
+  pintarMapa([a]);   // con una activación abierta, el mapa solo muestra sus AOIs
+  refrescarEstilos();
+  if (encuadrar !== null) encuadrarActivacion(a, encuadrar);
+  history.replaceState(null, "", "#" + code);
+}
+function encuadrarActivacion(a, siempre) {
+  let b = null;
+  capaAois.eachLayer(l => { if (l.feature.properties.code === a.code) b = b ? b.extend(l.getBounds()) : L.latLngBounds(l.getBounds().getSouthWest(), l.getBounds().getNorthEast()); });
+  if (b) { if (siempre || !map.getBounds().contains(b) || map.getZoom() < 8) map.fitBounds(b, { padding: [30, 30], maxZoom: 13 }); }
+  else if (a.centroid) map.setView([a.centroid[1], a.centroid[0]], Math.max(map.getZoom(), 9));
+}
+function cerrarDetalle() {
+  seleccion = null; limpiarExtras();
+  $("detalle").style.display = "none"; $("lista").style.display = "block";
+  $("panel").classList.remove("en-detalle");
+  pintarMapa(filtrar());
+  map.fitBounds(VISTA_INICIAL); history.replaceState(null, "", location.pathname + location.search);
+}
+
+$("detalle").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "volver") return cerrarDetalle();
+  const a = porCodigo.get(seleccion);
+  if (b.dataset.zoom !== undefined) {
+    const o = a.aois[+b.dataset.zoom];
+    if (o.extent) map.fitBounds(L.geoJSON(o.extent).getBounds(), { padding: [30, 30] });
+    return;
+  }
+  const clave = b.dataset.json || b.dataset.cog; if (!clave) return;
+  if (capasExtra.has(clave)) { quitarExtra(clave); return; }
+  b.disabled = true; const txt = b.textContent; b.textContent = "Cargando…";
+  try {
+    const capa = b.dataset.json ? await capaVector(b.dataset.json) : await capaImagen(b.dataset.cog);
+    if (seleccion !== a.code) return;
+    capa.addTo(map); capasExtra.set(clave, { capa, etq: b.dataset.etq, btn: b });
+    b.classList.add("on");
+    if (capa.getBounds && capa.getBounds().isValid()) map.fitBounds(capa.getBounds(), { padding: [30, 30] });
+    pintarCapasActivas();
+  } catch (err) {
+    console.error(err); alert("No se pudo cargar la capa: " + err.message);
+  } finally { b.disabled = false; b.textContent = txt; }
+});
+
+// ---------- Capas bajo demanda (bucket público del visor oficial, con CORS) ----------
+const ESTILO_DANO = { "Destroyed": "#b71c1c", "Damaged": "#ef6c00", "Possibly damaged": "#fbc02d" };
+async function capaVector(url) {
+  const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status);
+  const gj = await r.json();
+  const c = color(porCodigo.get(seleccion));
+  const dano = f => ESTILO_DANO[f.properties?.damage_gra] || c;
+  return L.geoJSON(gj, {
+    style: f => ({ color: dano(f), weight: 1.5, fillColor: dano(f), fillOpacity: .45 }),
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 4, color: "#fff", weight: 1, fillColor: dano(f), fillOpacity: 1 }),
+    onEachFeature: (f, l) => {
+      const p = Object.entries(f.properties || {}).filter(([, v]) => v !== null && v !== "").slice(0, 12);
+      if (p.length) l.bindPopup(p.map(([k, v]) => `<b>${esc(k)}</b>: ${esc(v)}`).join("<br>"));
+    }
+  });
+}
+let libRaster = null;
+const cargarScript = src => new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => ko(new Error("no se pudo cargar " + src)); document.head.appendChild(s); });
+async function capaImagen(url) {
+  libRaster ??= cargarScript("https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js")
+    .then(() => cargarScript("https://unpkg.com/georaster-layer-for-leaflet@3.10.0/dist/georaster-layer-for-leaflet.min.js"));
+  await libRaster;
+  const georaster = await parseGeoraster(url);
+  // Los COG del visor son de 8 bits (RGB, o una banda en SAR) con 0 como sin dato.
+  return new GeoRasterLayer({
+    georaster, pane: "imagenes", resolution: 256, opacity: 1,
+    pixelValuesToColorFn: v => {
+      const nb = v.length;
+      if (nb >= 3) { if (!v[0] && !v[1] && !v[2]) return null; if (nb > 3 && v[3] === 0) return null; return `rgb(${v[0]},${v[1]},${v[2]})`; }
+      if (!v[0] || (nb === 2 && v[1] === 0)) return null;
+      return `rgb(${v[0]},${v[0]},${v[0]})`;
+    }
+  });
+}
+function quitarExtra(clave) {
+  const x = capasExtra.get(clave); if (!x) return;
+  map.removeLayer(x.capa); x.btn?.classList.remove("on"); capasExtra.delete(clave); pintarCapasActivas();
+}
+function limpiarExtras() { [...capasExtra.keys()].forEach(quitarExtra); }
+function pintarCapasActivas() {
+  $("capas-activas").innerHTML = [...capasExtra].map(([k, x]) => `<div class="c">${esc(x.etq)}<button data-k="${esc(k)}" title="Quitar">✕</button></div>`).join("");
+}
+$("capas-activas").addEventListener("click", e => { const b = e.target.closest("button"); if (b) quitarExtra(b.dataset.k); });
+
+// ---------- Filtros e inicio ----------
+document.querySelectorAll(".kpi").forEach(k => k.addEventListener("click", () => {
+  document.querySelectorAll(".kpi").forEach(x => x.classList.toggle("sel", x === k));
+  filtro.estado = k.dataset.estado; if (seleccion) cerrarDetalle(); pintarLista();
+}));
+[["f-texto", "texto", "input"], ["f-cat", "cat", "change"], ["f-anio", "anio", "change"], ["f-prod", "prod", "change"]].forEach(([id, k, ev]) =>
+  $(id).addEventListener(ev, e => { filtro[k] = e.target.value; if (seleccion) cerrarDetalle(); pintarLista(); }));
+$("btn-ayuda").onclick = () => $("ayuda").style.display = "flex";
+$("ayuda").onclick = e => { if (e.target.id === "ayuda" || e.target.id === "ayuda-x") $("ayuda").style.display = "none"; };
+
+async function iniciar() {
+  try {
+    let d;
+    try {
+      const r = await fetch("data/activaciones.json", { cache: "no-cache" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      d = await r.json();
+    } catch {
+      // Abierto como fichero local (file://) fetch no funciona: se carga la copia .js del índice.
+      await cargarScript("data/activaciones.js");
+      d = window.ACTIVACIONES;
+    }
+    ACTS = d.activations; porCodigo = new Map(ACTS.map(a => [a.code, a]));
+    $("actualizado").textContent = "Datos: " + fecha(d.generated, true);
+    $("k-todas").textContent = ACTS.length;
+    $("k-abiertas").textContent = ACTS.filter(a => !a.closed).length;
+    $("k-cerradas").textContent = ACTS.filter(a => a.closed).length;
+    $("f-cat").insertAdjacentHTML("beforeend", [...new Set(ACTS.map(a => a.category))].map(c => `<option value="${esc(c)}">${esc(CAT_ES[c] || c)}</option>`).join(""));
+    $("f-anio").insertAdjacentHTML("beforeend", [...new Set(ACTS.map(a => a.activationTime.slice(0, 4)))].map(y => `<option>${y}</option>`).join(""));
+    pintarLista();
+    const h = location.hash.slice(1); if (porCodigo.has(h)) abrir(h, true);
+  } catch (e) {
+    $("lista").innerHTML = `<div class="vacio">No se pudo cargar el índice de activaciones (${esc(e.message)}).</div>`;
+  }
+}
+iniciar();
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>
