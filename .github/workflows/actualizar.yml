@@ -1,7 +1,7 @@
 name: Actualizar índice de activaciones
 on:
   schedule:
-    - cron: "17 */3 * * *"   # cada 3 horas
+    - cron: "17 5,17 * * *"   # cada 12 horas (05:17 y 17:17 UTC)
   workflow_dispatch:
 permissions:
   contents: write
