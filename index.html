@@ -53,6 +53,9 @@
   .caja h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--suave);margin:0 0 6px}
   dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0}
   dt{color:var(--suave)}dd{margin:0}
+  details.original{margin-top:4px;font-size:12px;color:var(--suave)}
+  details.original summary{cursor:pointer}
+  details.original p{margin:4px 0 0}
   .aviso{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px}
   a{color:var(--azul2)}
   .enlaces{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -194,7 +197,10 @@ const bases = {
 L.control.layers(bases, null, { position: "topright" }).addTo(map);
 map.attributionControl.addAttribution("Datos: Copernicus Emergency Management Service");
 map.createPane("imagenes").style.zIndex = 350;
+// Los AOI van en un pane por debajo de las capas de producto para no taparlas ni robarles los clics.
+map.createPane("aois").style.zIndex = 380;
 const capaAois = L.geoJSON(null, {
+  pane: "aois",
   style: f => estiloAoi(f.properties.code),
   onEachFeature: (f, l) => {
     l.bindTooltip(`${f.properties.code} · AOI${String(f.properties.number).padStart(2, "0")} ${f.properties.name}`, { sticky: true });
@@ -205,7 +211,8 @@ const capaPuntos = L.layerGroup().addTo(map);
 
 function estiloAoi(code) {
   const a = porCodigo.get(code), sel = seleccion === code;
-  return { color: sel ? "#12324a" : color(a), weight: sel ? 3 : 1.5, fillColor: color(a), fillOpacity: sel ? 0.12 : 0.25, dashArray: a.closed ? null : "6 4" };
+  // Con la activación abierta solo se dibuja el contorno (sin relleno), para dejar ver imágenes y capas de producto.
+  return { color: sel ? "#12324a" : color(a), weight: sel ? 2.5 : 1.5, fill: !sel, fillColor: color(a), fillOpacity: 0.25, dashArray: a.closed ? null : "6 4" };
 }
 function estiloPunto(a) {
   const sel = seleccion === a.code;
@@ -220,7 +227,7 @@ function pintarMapa(visibles) {
     if (!set.has(a.code)) continue;
     if (a.detail) for (const o of a.aois) if (o.extent)
       capaAois.addData({ type: "Feature", geometry: o.extent, properties: { code: a.code, number: o.number, name: o.name } });
-    if (a.centroid) {
+    if (a.centroid && !(seleccion === a.code && a.detail && a.aois.length)) {
       const m = L.circleMarker([a.centroid[1], a.centroid[0]], estiloPunto(a))
         .bindTooltip(`<b>${a.code}</b> · ${esc(a.name)}<br>${fecha(a.activationTime)}`)
         .on("click", () => abrir(a.code, false));
@@ -241,7 +248,7 @@ function tiposDe(a) {
   return ["FEP", "DEL", "GRA", "REF"].filter(t => s.has(t));
 }
 function textoBusqueda(a) {
-  if (!a._txt) a._txt = [a.code, a.name, a.summary, a.reason, a.activator,
+  if (!a._txt) a._txt = [a.code, a.name, a.summary, a.reason, a.reasonEs, a.activator,
     ...(a.aois || []).flatMap(o => [o.name, ...o.products.flatMap(p => p.images.map(i => i.sensorName))])].join(" ").toLowerCase();
   return a._txt;
 }
@@ -312,6 +319,13 @@ function htmlProducto(a, o, p) {
     ${p.downloadPath ? `<div class="enlaces"><a class="btn" href="${esc(p.downloadPath)}" rel="noopener">⬇ Paquete del producto (.zip)</a></div>` : ""}
   </div>`;
 }
+function htmlDescripcion(a) {
+  const en = a.reason || a.summary;
+  if (!en) return "";
+  if (!a.reasonEs) return `<p style="margin:8px 0 0">${esc(en)}</p>`;
+  return `<p style="margin:8px 0 0">${esc(a.reasonEs)}</p>
+    <details class="original"><summary>${a.reasonAuto ? "Traducción automática · ver" : "Ver"} texto original (inglés)</summary><p>${esc(en)}</p></details>`;
+}
 function htmlDetalle(a) {
   const oficial = `https://mapping.emergency.copernicus.eu/activations/${a.code}/`;
   let h = `<button class="volver" id="volver">← Volver al listado</button>
@@ -328,7 +342,7 @@ function htmlDetalle(a) {
       ${a.gdacsId ? `<dt>GDACS</dt><dd>${esc(a.gdacsId)}</dd>` : ""}
       ${a.charterNumber ? `<dt>Charter</dt><dd>${a.charterUrl ? `<a href="${esc(a.charterUrl)}" target="_blank" rel="noopener">${esc(a.charterNumber)}</a>` : esc(a.charterNumber)}</dd>` : ""}
     </dl>
-    <p style="margin:8px 0 0">${esc(a.reason || a.summary)}</p>
+    ${htmlDescripcion(a)}
     <div class="enlaces">
       <a class="btn" href="${oficial}" target="_blank" rel="noopener">Portal oficial (descarga de imágenes para usuarios autorizados)</a>
       ${a.reportLink ? `<a class="btn" href="${esc(a.reportLink)}" target="_blank" rel="noopener">Informe</a>` : ""}
@@ -337,7 +351,7 @@ function htmlDetalle(a) {
   if (a.detail) {
     if (a.stats && Object.keys(a.stats).length) h += `<div class="caja"><h3>Cifras globales (Copernicus)</h3><dl>${Object.entries(a.stats).map(([k, v]) =>
       `<dt>${esc(k === "max_extent" ? "Max. extent [ha]" : k)}</dt><dd>${typeof v === "number" ? v.toLocaleString("es-ES") : esc(v)}</dd>`).join("")}</dl></div>`;
-    h += `<div class="sub" style="margin-left:2px">Áreas de interés (${a.aois.length})</div>`;
+    h += `<div class="sub" style="margin-left:2px;display:flex;align-items:center">Áreas de interés (${a.aois.length})<label style="margin-left:auto;text-transform:none;letter-spacing:0;cursor:pointer"><input type="checkbox" id="ver-aois" checked> Ver contorno en el mapa</label></div>`;
     h += a.aois.map((o, i) => {
       const nImg = o.products.reduce((n, p) => n + p.images.length, 0);
       const tipos = [...new Set(o.products.map(p => p.type))];
@@ -354,7 +368,7 @@ function htmlDetalle(a) {
 
 function abrir(code, encuadrar) {
   const a = porCodigo.get(code); if (!a) return;
-  seleccion = code; limpiarExtras();
+  seleccion = code; limpiarExtras(); map.addLayer(capaAois);
   $("detalle").innerHTML = htmlDetalle(a);
   $("detalle").style.display = "block"; $("lista").style.display = "none"; $("detalle").scrollTop = 0;
   $("panel").classList.add("en-detalle");
@@ -370,13 +384,16 @@ function encuadrarActivacion(a, siempre) {
   else if (a.centroid) map.setView([a.centroid[1], a.centroid[0]], Math.max(map.getZoom(), 9));
 }
 function cerrarDetalle() {
-  seleccion = null; limpiarExtras();
+  seleccion = null; limpiarExtras(); map.addLayer(capaAois);
   $("detalle").style.display = "none"; $("lista").style.display = "block";
   $("panel").classList.remove("en-detalle");
   pintarMapa(filtrar());
   map.fitBounds(VISTA_INICIAL); history.replaceState(null, "", location.pathname + location.search);
 }
 
+$("detalle").addEventListener("change", e => {
+  if (e.target.id === "ver-aois") e.target.checked ? map.addLayer(capaAois) : map.removeLayer(capaAois);
+});
 $("detalle").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.id === "volver") return cerrarDetalle();
@@ -402,15 +419,21 @@ $("detalle").addEventListener("click", async e => {
 });
 
 // ---------- Capas bajo demanda (bucket público del visor oficial, con CORS) ----------
+// Las capas de producto se pintan en canvas: algunas (Grading) traen miles de polígonos muy densos y en SVG el navegador no termina de redibujarlas tras el zoom.
+const lienzo = L.canvas({ padding: 0.3 });
 const ESTILO_DANO = { "Destroyed": "#b71c1c", "Damaged": "#ef6c00", "Possibly damaged": "#fbc02d" };
 async function capaVector(url) {
   const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status);
   const gj = await r.json();
-  const c = color(porCodigo.get(seleccion));
+  // Color por tipo de capa para distinguirlas al superponerlas; el evento usa el color de la categoría y el daño (Grading) manda sobre todo.
+  const tipo = (url.match(/_([A-Za-z]+)_v\d+\.json$/) || [])[1] || "";
+  const c = /^builtUp/.test(tipo) ? "#455a64" : /^transportation/.test(tipo) ? "#212121" : /^facilities/.test(tipo) ? "#6a1b9a" : /^naturalLandUse/.test(tipo) ? "#2e7d32"
+    : /^notAnalysed/.test(tipo) ? "#9e9e9e" : /^(floodDepth|modelledEvent)/.test(tipo) ? "#00838f" : /^previousObservedEvent/.test(tipo) ? "#8d6e63" : color(porCodigo.get(seleccion));
   const dano = f => ESTILO_DANO[f.properties?.damage_gra] || c;
   return L.geoJSON(gj, {
+    renderer: lienzo,
     style: f => ({ color: dano(f), weight: 1.5, fillColor: dano(f), fillOpacity: .45 }),
-    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 4, color: "#fff", weight: 1, fillColor: dano(f), fillOpacity: 1 }),
+    pointToLayer: (f, ll) => L.circleMarker(ll, { renderer: lienzo, radius: 4, color: "#fff", weight: 1, fillColor: dano(f), fillOpacity: 1 }),
     onEachFeature: (f, l) => {
       const p = Object.entries(f.properties || {}).filter(([, v]) => v !== null && v !== "").slice(0, 12);
       if (p.length) l.bindPopup(p.map(([k, v]) => `<b>${esc(k)}</b>: ${esc(v)}`).join("<br>"));

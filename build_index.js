@@ -71,6 +71,57 @@ function resumirProducto(p, bucket) {
   };
 }
 
+// --- Descripción en español ---
+// traducciones.json guarda por código el texto inglés traducido y su versión española. Las revisadas a mano
+// (traducciones_manuales.mjs) llevan auto:false; lo que falte, o cuyo texto inglés haya cambiado, se traduce
+// con la API pública de MyMemory (auto:true). Si la API falla, la activación se queda en inglés hasta la próxima ejecución.
+const TRADUCCIONES = new URL("./traducciones.json", import.meta.url);
+
+async function traducirTexto(texto) {
+  // MyMemory admite unos 500 caracteres por petición: se trocea por frases.
+  const frases = texto.replace(/\s+/g, " ").trim().match(/[^.!?]+[.!?]*\s*/g) || [texto];
+  const trozos = [];
+  for (const f of frases) {
+    if (trozos.length && (trozos.at(-1) + f).length <= 450) trozos[trozos.length - 1] += f;
+    else trozos.push(f);
+  }
+  const partes = [];
+  for (const t of trozos) {
+    const r = await fetch("https://api.mymemory.translated.net/get?langpair=en|es&q=" + encodeURIComponent(t.trim()));
+    const j = await r.json();
+    const es = j?.responseData?.translatedText;
+    if (!r.ok || j.responseStatus !== 200 || !es || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(es)) throw new Error("MyMemory: " + (j?.responseDetails || r.status));
+    partes.push(es.trim());
+    await espera(300);
+  }
+  return partes.join(" ");
+}
+
+async function traducir(acts) {
+  let tr = {};
+  try { tr = JSON.parse(await readFile(TRADUCCIONES, "utf8")); } catch {}
+  let nuevas = 0, fallos = 0;
+  for (const a of acts) {
+    const en = a.reason || a.summary || "";
+    if (!en) continue;
+    if (tr[a.code]?.en !== en) {
+      try {
+        tr[a.code] = { en, es: await traducirTexto(en), auto: true };
+        nuevas++;
+      } catch (e) {
+        fallos++;
+        console.log(`${a.code}: sin traducir (${e.message})`);
+        // Mejor una traducción del texto anterior que nada: se conserva si la había.
+        if (!tr[a.code]) continue;
+      }
+    }
+    a.reasonEs = tr[a.code].es;
+    a.reasonAuto = !!tr[a.code].auto || tr[a.code].en !== en;
+  }
+  if (nuevas) await writeFile(TRADUCCIONES, JSON.stringify(tr, null, 1));
+  console.log(`Traducciones: ${nuevas} automáticas nuevas, ${fallos} fallidas`);
+}
+
 async function main() {
   // countries=ES filtra en servidor (ojo: "ESP" o "Spain" devuelven 0); se filtra además en cliente por si cambia.
   const lista = await fetchJSON(`${API_LISTA}?countries=ES&limit=2000`);
@@ -145,6 +196,8 @@ async function main() {
       if (!a.detail && ant?.detail) out[i] = { ...ant, lastUpdate: a.lastUpdate };
     });
   } catch {}
+
+  await traducir(out);
 
   await mkdir(new URL("./data/", import.meta.url), { recursive: true });
   const json = JSON.stringify({ generated: new Date().toISOString(), activations: out });
