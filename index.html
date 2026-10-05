@@ -491,7 +491,14 @@ async function iniciar() {
       d = window.ACTIVACIONES;
     }
     ACTS = d.activations; porCodigo = new Map(ACTS.map(a => [a.code, a]));
-    $("actualizado").textContent = "Datos: " + fecha(d.generated, true);
+    // El índice solo se regenera cuando cambia algo en CEMS; data/estado.json guarda la última comprobación (cada 12 h).
+    $("actualizado").textContent = "Último cambio: " + fecha(d.generated, true) + (location.protocol === "file:" ? " (copia local)" : "");
+    $("actualizado").title = "Fecha en que cambió por última vez algún dato de las activaciones";
+    fetch("data/estado.json", { cache: "no-cache" }).then(r => r.ok ? r.json() : null).then(e => {
+      if (!e?.comprobado) return;
+      $("actualizado").textContent = "Comprobado: " + fecha(e.comprobado, true) + " · Último cambio: " + fecha(d.generated);
+      $("actualizado").title = "CEMS se consulta cada 12 h; el índice solo se regenera cuando cambia algún dato de las activaciones";
+    }).catch(() => {});
     $("k-todas").textContent = ACTS.length;
     $("k-abiertas").textContent = ACTS.filter(a => !a.closed).length;
     $("k-cerradas").textContent = ACTS.filter(a => a.closed).length;
