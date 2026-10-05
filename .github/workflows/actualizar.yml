@@ -14,15 +14,21 @@ jobs:
         with:
           node-version: 22
       - run: node build_index.js
-      - name: Commit si hay cambios
+      - name: Commit de la comprobación (y del índice si hay cambios)
         run: |
-          # "generated" cambia en cada ejecución: solo se sube si cambia el contenido de las activaciones
-          sin_fecha() { sed 's/"generated":"[^"]*"//'; }
-          if [ "$(git show HEAD:data/activaciones.json | sin_fecha)" = "$(sin_fecha < data/activaciones.json)" ]; then
-            echo "Sin cambios"; exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/activaciones.json data/activaciones.js traducciones.json
-          git commit -m "Actualiza índice de activaciones"
+          # data/estado.json guarda la hora de la última comprobación y se sube siempre
+          date -u +'{"comprobado":"%Y-%m-%dT%H:%M:%SZ"}' > data/estado.json
+          git add data/estado.json
+          # "generated" cambia en cada ejecución: el índice solo se sube si cambia el contenido de las activaciones
+          sin_fecha() { sed 's/"generated":"[^"]*"//'; }
+          if [ "$(git show HEAD:data/activaciones.json | sin_fecha)" = "$(sin_fecha < data/activaciones.json)" ]; then
+            echo "Sin cambios"
+            git checkout -- data/activaciones.json data/activaciones.js traducciones.json
+            git commit -m "Comprobación sin cambios"
+          else
+            git add data/activaciones.json data/activaciones.js traducciones.json
+            git commit -m "Actualiza índice de activaciones"
+          fi
           git push
