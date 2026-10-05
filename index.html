@@ -80,6 +80,12 @@
   #capas-activas{position:absolute;left:54px;top:10px;z-index:500;display:flex;flex-direction:column;gap:4px;max-width:60%}
   #capas-activas .c{background:rgba(255,255,255,.95);border-radius:6px;padding:3px 6px 3px 9px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.3);display:flex;gap:6px;align-items:center}
   #capas-activas button{border:0;background:none;cursor:pointer;font-size:14px;color:#b71c1c}
+  #capas-activas .c small{color:var(--suave)}
+  #capas-activas .met{flex-direction:column;align-items:stretch;gap:2px;padding:6px 9px}
+  #capas-activas .met label{display:flex;align-items:center;gap:5px;cursor:pointer}
+  #capas-activas .met i{width:11px;height:11px;border-radius:2px;display:inline-block;flex:none}
+  #capas-activas .met .n{margin-left:auto;padding-left:10px;color:var(--suave)}
+  #capas-activas .met .sep{border-top:1px solid var(--borde);margin-top:3px;padding-top:3px}
   #mapa-cont{position:relative;flex:1;min-width:0;display:flex}
   #ayuda{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:14px}
   #ayuda .tarjeta{background:#fff;border-radius:10px;max-width:640px;max-height:90vh;overflow:auto;padding:16px 18px;position:relative}
@@ -151,6 +157,8 @@
     <li><b>Monitorización (MONIT01, 02…)</b>: actualizaciones posteriores del mismo tipo de producto con una imagen nueva.</li>
   </ul>
   <p>Al abrir una activación verás quién la solicitó, sus AOIs y, por cada producto, el estado, la fecha de entrega y <b>las imágenes de satélite utilizadas</b> (sensor, clase de resolución, fecha de adquisición y nombre de fichero). Desde ahí puedes pintar en el mapa las capas vectoriales del producto y la imagen tal y como la sirve el visor oficial.</p>
+  <h3>Cartografía automática y cartografía fotointerpretada</h3>
+  <p>Cada entidad de un producto indica cómo se obtuvo (atributo <code>det_method</code>): por <b>extracción automática o semiautomática</b> a partir de la imagen, por <b>fotointerpretación</b> (un operador la dibuja o la revisa a mano) o por <b>modelización</b>. Al pintar capas en el mapa aparece el cuadro <b>Método de obtención</b>, con el número de entidades de cada tipo: desmarca un método para ocultarlo y marca <b>Colorear por método</b> para distinguirlos por color. Sirve para entender solapes o intersecciones extrañas entre capas que proceden de fuentes distintas (por ejemplo, un área quemada semiautomática de una Delineation frente a elementos fotointerpretados de un Grading).</p>
   <h3>Limitaciones de los datos</h3>
   <ul>
     <li>La API pública de Copernicus solo da el detalle (solicitante, AOIs, productos, imágenes) de las activaciones <b>desde septiembre de 2023</b>. Las anteriores aparecen con sus datos básicos y un punto en el mapa; el detalle exige iniciar sesión en el portal oficial.</li>
@@ -412,6 +420,7 @@ $("detalle").addEventListener("click", async e => {
     capa.addTo(map); capasExtra.set(clave, { capa, etq: b.dataset.etq, btn: b });
     b.classList.add("on");
     if (capa.getBounds && capa.getBounds().isValid()) map.fitBounds(capa.getBounds(), { padding: [30, 30] });
+    aplicarMetodo();
     pintarCapasActivas();
   } catch (err) {
     console.error(err); alert("No se pudo cargar la capa: " + err.message);
@@ -422,6 +431,26 @@ $("detalle").addEventListener("click", async e => {
 // Las capas de producto se pintan en canvas: algunas (Grading) traen miles de polígonos muy densos y en SVG el navegador no termina de redibujarlas tras el zoom.
 const lienzo = L.canvas({ padding: 0.3 });
 const ESTILO_DANO = { "Destroyed": "#b71c1c", "Damaged": "#ef6c00", "Possibly damaged": "#fbc02d" };
+// Método con el que Copernicus obtuvo cada entidad (atributo det_method). Mezclar en el mapa entidades automáticas y
+// fotointerpretadas (p. ej. una Delineation con un Grading) es lo que suele dar intersecciones raras.
+const METODO = {
+  auto:   { n: "Automática / semiautomática", c: "#ef6c00", corto: "auto." },
+  manual: { n: "Fotointerpretación (manual)", c: "#1565c0", corto: "fotoint." },
+  modelo: { n: "Modelización", c: "#7b1fa2", corto: "modelo" },
+  otro:   { n: "Sin método indicado", c: "#757575", corto: "sin método" }
+};
+const METODO_ES = { "Automatic extraction": "Extracción automática", "Semi-automatic extraction": "Extracción semiautomática", "Photo-interpretation": "Fotointerpretación", "Modelling": "Modelización", "Not Applicable": "No aplicable" };
+const verMetodo = { auto: true, manual: true, modelo: true, otro: true };
+let colorPorMetodo = false;
+const grupoMetodo = f => { const m = String(f.properties?.det_method || ""); return /automatic/i.test(m) ? "auto" : /^photo/i.test(m) ? "manual" : /^modell/i.test(m) ? "modelo" : "otro"; };
+// Muestra u oculta las entidades de cada capa según su método y vuelve a aplicar el color.
+function aplicarMetodo() {
+  for (const { capa } of capasExtra.values()) {
+    if (!capa._todas) continue;
+    for (const l of capa._todas) { const ver = verMetodo[l._grupo]; if (ver !== capa.hasLayer(l)) ver ? capa.addLayer(l) : capa.removeLayer(l); }
+    capa.setStyle(capa._estilo);
+  }
+}
 async function capaVector(url) {
   const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status);
   const gj = await r.json();
@@ -429,16 +458,22 @@ async function capaVector(url) {
   const tipo = (url.match(/_([A-Za-z]+)_v\d+\.json$/) || [])[1] || "";
   const c = /^builtUp/.test(tipo) ? "#455a64" : /^transportation/.test(tipo) ? "#212121" : /^facilities/.test(tipo) ? "#6a1b9a" : /^naturalLandUse/.test(tipo) ? "#2e7d32"
     : /^notAnalysed/.test(tipo) ? "#9e9e9e" : /^(floodDepth|modelledEvent)/.test(tipo) ? "#00838f" : /^previousObservedEvent/.test(tipo) ? "#8d6e63" : color(porCodigo.get(seleccion));
-  const dano = f => ESTILO_DANO[f.properties?.damage_gra] || c;
-  return L.geoJSON(gj, {
+  const dano = f => colorPorMetodo ? METODO[grupoMetodo(f)].c : ESTILO_DANO[f.properties?.damage_gra] || c;
+  const estilo = f => /Point/.test(f.geometry?.type) ? { color: "#fff", weight: 1, fillColor: dano(f), fillOpacity: 1 }
+    : { color: dano(f), weight: 1.5, fillColor: dano(f), fillOpacity: .45 };
+  const cuenta = {};
+  const capa = L.geoJSON(gj, {
     renderer: lienzo,
-    style: f => ({ color: dano(f), weight: 1.5, fillColor: dano(f), fillOpacity: .45 }),
-    pointToLayer: (f, ll) => L.circleMarker(ll, { renderer: lienzo, radius: 4, color: "#fff", weight: 1, fillColor: dano(f), fillOpacity: 1 }),
+    style: estilo,
+    pointToLayer: (f, ll) => L.circleMarker(ll, { renderer: lienzo, radius: 4 }),
     onEachFeature: (f, l) => {
+      l._grupo = grupoMetodo(f); cuenta[l._grupo] = (cuenta[l._grupo] || 0) + 1;
       const p = Object.entries(f.properties || {}).filter(([, v]) => v !== null && v !== "").slice(0, 12);
-      if (p.length) l.bindPopup(p.map(([k, v]) => `<b>${esc(k)}</b>: ${esc(v)}`).join("<br>"));
+      if (p.length) l.bindPopup(p.map(([k, v]) => `<b>${esc(k)}</b>: ${esc(k === "det_method" && METODO_ES[v] ? `${METODO_ES[v]} (${v})` : v)}`).join("<br>"));
     }
   });
+  capa._todas = capa.getLayers(); capa._estilo = estilo; capa._cuenta = cuenta;
+  return capa;
 }
 let libRaster = null;
 const cargarScript = src => new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => ko(new Error("no se pudo cargar " + src)); document.head.appendChild(s); });
@@ -464,9 +499,25 @@ function quitarExtra(clave) {
 }
 function limpiarExtras() { [...capasExtra.keys()].forEach(quitarExtra); }
 function pintarCapasActivas() {
-  $("capas-activas").innerHTML = [...capasExtra].map(([k, x]) => `<div class="c">${esc(x.etq)}<button data-k="${esc(k)}" title="Quitar">✕</button></div>`).join("");
+  const tot = {};
+  let h = [...capasExtra].map(([k, x]) => {
+    const cu = x.capa._cuenta, gs = cu ? Object.keys(METODO).filter(g => cu[g]) : [];
+    gs.forEach(g => tot[g] = (tot[g] || 0) + cu[g]);
+    return `<div class="c"><span>${esc(x.etq)}${gs.length ? ` <small>· ${gs.map(g => METODO[g].corto).join(" + ")}</small>` : ""}</span><button data-k="${esc(k)}" title="Quitar">✕</button></div>`;
+  }).join("");
+  const gs = Object.keys(METODO).filter(g => tot[g]);
+  if (gs.length) h += `<div class="c met"><b>Método de obtención</b>${gs.map(g =>
+    `<label><input type="checkbox" data-m="${g}" ${verMetodo[g] ? "checked" : ""}><i style="background:${METODO[g].c}"></i>${METODO[g].n}<span class="n">${tot[g].toLocaleString("es-ES")}</span></label>`).join("")}
+    <label class="sep"><input type="checkbox" id="color-metodo" ${colorPorMetodo ? "checked" : ""}>Colorear por método</label></div>`;
+  $("capas-activas").innerHTML = h;
 }
 $("capas-activas").addEventListener("click", e => { const b = e.target.closest("button"); if (b) quitarExtra(b.dataset.k); });
+$("capas-activas").addEventListener("change", e => {
+  if (e.target.id === "color-metodo") colorPorMetodo = e.target.checked;
+  else if (e.target.dataset.m) verMetodo[e.target.dataset.m] = e.target.checked;
+  else return;
+  aplicarMetodo();
+});
 
 // ---------- Filtros e inicio ----------
 document.querySelectorAll(".kpi").forEach(k => k.addEventListener("click", () => {
