@@ -328,5 +328,10 @@
   "en": "Heavy rains started on 31 January 2015 and have caused floods in the Ebro river basin affecting many villages in the Zaragoza province.",
   "es": "Las fuertes lluvias que comenzaron el 31 de enero de 2015 han causado inundaciones en la cuenca del Ebro que afectan a muchos pueblos de la provincia de Zaragoza.",
   "auto": false
+ },
+ "EMSR935": {
+  "en": "On 19 October 2026, an episode of adverse weather affecting the south of Valencia province and the north of Alicante is impacting a large number of people. Up to 500 rescues were carried out within 12 hours, with several fatalities reported and communities affected by disruptions to essential services, including electricity and drinking water supplies. Copernicus EMS Rapid Mapping is requested to provide initial roughestimation and flood extent emergency mapping.",
+  "es": "El 19 de octubre de 2026, un episodio de meteorología adversa que afecta al sur de la provincia de Valencia y al norte de Alicante está afectando a un gran número de personas. Se llevaron a cabo hasta 500 rescates en 12 horas, con varias muertes reportadas y comunidades afectadas por interrupciones en los servicios esenciales, incluido el suministro de electricidad y agua potable. Se solicita a Copernicus EMS Rapid Mapping que proporcione una estimación aproximada inicial y un mapeo de emergencia de la extensión de las inundaciones.",
+  "auto": true
  }
 }
